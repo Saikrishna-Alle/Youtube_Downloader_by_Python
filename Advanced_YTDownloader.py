@@ -1,77 +1,93 @@
-import pytube
+import yt_dlp
 import re
 
-class Youtube_Downloader:
-    def __init__(self, Link, ITag_Number, Location):
-        # Initialize the YouTube object and ask for the video link
-        self.link = Link
-        self.yt = pytube.YouTube(self.link)
-        self.ITag_Number = ITag_Number
-        self.location = Location
 
-    # Showing video details
-    def show_details(self):
+class YoutubeDownloader:
+    def __init__(self, link, format_code, location):
+        self.link = link
+        self.format_code = format_code
+        self.location = location
+
+    def show_details(self, info_dict):
         print("Link: ", self.link)
-        print("Title: ", self.yt.title)
-        print("Number of views: ", self.yt.views)
-        print("Length of video: ", self.yt.length)
-        print("Rating of video: ", self.yt.rating)
-    
-    # Download video based on user choice or higher resolution
+        print("Title: ", info_dict.get('title'))
+        print("Number of views: ", info_dict.get('view_count'))
+        print("Length of video: ", info_dict.get('duration'))
+        print("Rating of video: ", info_dict.get('average_rating'))
+
     def download(self):
-        # Show video details
-        self.show_details()
+        ydl_opts = {
+            'outtmpl': f'{self.location}/%(title)s.%(ext)s',
+            'format': self.format_code
+        }
 
-        #File Name & Format
-        Name = re.sub(r'[^a-zA-Z0-9\s]', '', self.yt.title).strip()
-        file_extension = "mp3" if int(self.ITag_Number) >=100 else "mp4"
-
-        # Check if the specified ITag exists in either audio or video streams
-        if self.ITag_Number in [str(stream.itag) for stream in self.yt.streams]:
-            ys = self.yt.streams.get_by_itag(self.ITag_Number)
-            print("Downloading Audio..." if int(self.ITag_Number) >=100 else "Downloading Video...")
-            ys.download(self.location, filename=f"{Name}.{file_extension}")
-        
-        elif self.ITag_Number == None or int(self.ITag_Number) >=100:
-            print("ITag not found. Downloading highest quality audio...")
-            self.yt.streams.get_audio_only().download(output_path=self.location, filename=f"{Name}.{file_extension}")
-
-        else:
-            print("ITag not found. Downloading highest quality video...")
-            self.yt.streams.get_highest_resolution().download(output_path=self.location, filename=f"{Name}.{file_extension}")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(self.link, download=False)
+            self.show_details(info_dict)
+            ydl.download([self.link])
 
 
-Link = input("Enter the link of the YouTube video you want to download: ")
-Info = '''
-Default Audio Streams and ITag Numbers:
-48kbps: 139
-128kbps: 140
-50kbps: 249
-70kbps: 250
-160kbps: 251
-Default Resolutions and ITag Numbers:
-144p: 17
-360p: 18
-720p: 22
-'''
-print(Info)
-ITag_Number = input("Enter The ITag Number: ")
+def extract_numeric_format_id(format_id):
+    """Extract numeric part from format_id."""
+    match = re.search(r'\d+', format_id)
+    return int(match.group()) if match else 0
 
-# Specify your download location here Example(Android) = "//storage//emulated//0//YT Downloads"
-Location = "C:\\YT Downloads"
 
-if "playlist" in Link:
-    # Initialize the playlist
-    playlist = pytube.Playlist(Link)
+def remove_duplicates_and_sort(formats):
+    seen = set()
+    unique_formats = []
+    for format in formats:
+        if format['format_id'] not in seen:
+            seen.add(format['format_id'])
+            unique_formats.append(format)
+    return sorted(unique_formats, key=lambda f: extract_numeric_format_id(f['format_id']))
 
-    # Iterate through the playlist and download each video
-    for counter, video_url in enumerate(playlist.video_urls, start=1):
-        print(f"{counter} of {len(playlist.video_urls)} Video is downloading")
-        downloader = Youtube_Downloader(video_url, ITag_Number, Location)
-        downloader.download()
 
-    print(f"Total {len(playlist.video_urls)} Downloaded Successfully.")
-else:
-    downloader = Youtube_Downloader(Link, ITag_Number, Location)
+def main():
+    link = input("Enter the link of the YouTube video you want to download: ")
+    if not link:
+        print("Invalid link. Exiting...")
+        return
+
+    # List available formats
+    with yt_dlp.YoutubeDL() as ydl:
+        result = ydl.extract_info(link, download=False)
+        if 'formats' in result:
+            # Filter formats
+            audio_formats = [f for f in result['formats']
+                             if f['ext'] in ['m4a', 'webm']]
+            video_formats = [f for f in result['formats'] if f['ext'] == 'mp4']
+
+            # Print audio formats with a format note
+            print("Available audio formats:")
+            for format in remove_duplicates_and_sort(audio_formats):
+                format_note = format.get('format_note', 'No format note')
+                if format_note != 'No format note' and format_note in ['144p', '240p', '360p', '480p', '720p', '1080p']:
+                    print(
+                        f"{format['format_id']} : {format_note} : {format['ext']}")
+
+            # Print video formats with a format note
+            print("\nAvailable video formats:")
+            for format in remove_duplicates_and_sort(video_formats):
+                format_note = format.get('format_note', 'No format note')
+                if format_note != 'No format note' and int(format['format_id']) >= 235:
+                    print(
+                        f"{format['format_id']} : {format_note} : {format['ext']}")
+
+    format_code = input("Enter the format code for the desired quality: ")
+    if not format_code:
+        print("Invalid format code. Exiting...")
+        return
+
+    location = input(
+        "Enter the download location (default is current directory): ")
+    if not location:
+        location = "C:\YT Downloads"
+
+    downloader = YoutubeDownloader(link, format_code, location)
     downloader.download()
     print("Download completed!!")
+
+
+if __name__ == "__main__":
+    main()
