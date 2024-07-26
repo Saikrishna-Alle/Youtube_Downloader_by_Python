@@ -49,28 +49,24 @@ def main():
         print("Invalid link. Exiting...")
         return
 
-    # List available formats
     with yt_dlp.YoutubeDL() as ydl:
         result = ydl.extract_info(link, download=False)
         if 'formats' in result:
-            # Filter formats
             audio_formats = [f for f in result['formats']
-                             if f['ext'] in ['m4a', 'webm']]
+                             if f['ext'] in ['webm']]
             video_formats = [f for f in result['formats'] if f['ext'] == 'mp4']
 
-            # Print audio formats with a format note
             print("Available audio formats:")
             for format in remove_duplicates_and_sort(audio_formats):
                 format_note = format.get('format_note', 'No format note')
-                if format_note != 'No format note' and format_note in ['144p', '240p', '360p', '480p', '720p', '1080p']:
+                if format_note not in ['No format note', 'low', 'medium'] and len(format['format_id']) < 4:
                     print(
                         f"{format['format_id']} : {format_note} : {format['ext']}")
 
-            # Print video formats with a format note
             print("\nAvailable video formats:")
             for format in remove_duplicates_and_sort(video_formats):
                 format_note = format.get('format_note', 'No format note')
-                if format_note != 'No format note' and int(format['format_id']) >= 235:
+                if format_note != 'No format note' and (int(format['format_id']) <= 160 or int(format['format_id']) == 616):
                     print(
                         f"{format['format_id']} : {format_note} : {format['ext']}")
 
@@ -82,7 +78,7 @@ def main():
     location = input(
         "Enter the download location (default is current directory): ")
     if not location:
-        location = "C:\YT Downloads"
+        location = "."
 
     downloader = YoutubeDownloader(link, format_code, location)
     downloader.download()
